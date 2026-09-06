@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+
+# Run output. Matches any --out directory, not just the default "out".
+out/
+out-*/
+*.pgn
+decisions.jsonl
+
+# Editors and Python
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]
+.venv/
+venv/

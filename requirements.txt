@@ -1,0 +1,3 @@
+litellm>=1.40
+python-chess>=1.10
+python-dotenv>=1.0
