@@ -42,6 +42,7 @@ import chess.pgn
 import litellm
 from dotenv import load_dotenv
 from observation import OBS_VERSION, render_v1
+from render import RenderUnavailable, board_to_png
 
 load_dotenv()
 
@@ -119,6 +120,8 @@ def play(
     max_tokens: int = MAX_TOKENS,
     turn_cap: int = TURN_CAP,
     label: str = "game",
+    frames: bool = False,
+    frame_size: int = 480,
 ) -> dict:
     """Play one game. Returns a summary dict; appends to decisions.jsonl."""
     board = chess.Board()
@@ -127,6 +130,11 @@ def play(
     log = log_path.open("a", encoding="utf-8")
     forced = {white: 0, black: 0}
     spend = 0.0
+    frame_dir = out_dir / "frames" / label
+    if frames:
+        # One frame per ply, numbered so ffmpeg or an NLE can ingest the
+        # directory directly as an image sequence.
+        board_to_png(board, frame_dir / "t0000.png", size=frame_size)
 
     while not board.is_game_over() and board.fullmove_number <= turn_cap:
         model = white if board.turn == chess.WHITE else black
@@ -183,7 +191,10 @@ def play(
             log.flush()
 
         print(f"  ply {board.ply():3d}  {model:34s} {chosen}")
-        board.push_san(chosen)
+        move = board.push_san(chosen)
+        if frames:
+            board_to_png(board, frame_dir / f"t{board.ply():04d}.png",
+                         lastmove=move, size=frame_size)
 
     log.close()
 
@@ -205,6 +216,7 @@ def play(
         "result": board.result(), "plies": board.ply(),
         "termination": _termination(board),
         "forced": dict(forced), "spend": spend, "pgn": pgn_path,
+        "frames": frame_dir if frames else None,
     }
 
 
@@ -240,10 +252,22 @@ def main() -> None:
                     help=f"per model call (default {MAX_TOKENS})")
     ap.add_argument("--turn-cap", type=int, default=TURN_CAP,
                     help=f"full moves before a draw is declared (default {TURN_CAP})")
+    ap.add_argument("--frames", action="store_true",
+                    help="also write a PNG of the board after every ply"
+                         " (needs cairosvg; see README)")
+    ap.add_argument("--frame-size", type=int, default=480,
+                    help="frame edge in pixels (default 480)")
     ap.add_argument("-o", "--out", default="out", help="output directory")
     a = ap.parse_args()
 
     out = Path(a.out)
+    if a.frames:
+        # Fail before any model is billed, not after the first ply.
+        try:
+            from render import _cairosvg
+            _cairosvg()
+        except RenderUnavailable as exc:
+            raise SystemExit(str(exc)) from exc
     print(f"{a.white}  vs  {a.black}")
     print(f"{a.games} game(s), {a.mode} mode, {a.max_tokens} tokens/call\n")
 
@@ -255,6 +279,7 @@ def main() -> None:
         results.append(play(
             w, b, out, mode=a.mode, max_tokens=a.max_tokens,
             turn_cap=a.turn_cap, label=f"game{i}",
+            frames=a.frames, frame_size=a.frame_size,
         ))
         print()
 
@@ -283,6 +308,9 @@ def main() -> None:
     tail = f"   unfinished: {unfinished}" if unfinished else ""
     print(f"\n  spend ${total:.4f}   forced moves: {forced}{tail}")
     print(f"  logs: {out/'decisions.jsonl'}")
+    if a.frames:
+        shots = sum(len(list(r["frames"].glob("*.png"))) for r in results)
+        print(f"  frames: {shots} PNGs under {out/'frames'}")
 
 
 if __name__ == "__main__":

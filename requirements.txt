@@ -1,3 +1,9 @@
 litellm>=1.40
 python-chess>=1.10
 python-dotenv>=1.0
+
+# Optional: only needed for --frames (board PNGs).
+# Also requires the native libcairo library:
+#   macOS   brew install cairo
+#   Debian  sudo apt install libcairo2
+# cairosvg>=2.7

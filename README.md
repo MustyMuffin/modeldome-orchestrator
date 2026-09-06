@@ -26,10 +26,36 @@ Every run writes to `out/`:
 * **`decisions.jsonl`** - one line per model call, holding the **exact
   prompt sent** and the **exact text the model returned**, plus tokens in
   and out, cost, latency, and status.
+* **`frames/game1/t0000.png` ...** - with `--frames`, one board image per
+  ply, ready to assemble into video.
 
 That second file is the interesting one. It is a complete record of the
 model reasoning its way to a move, including the times it reasons its way
 into a terrible one.
+
+## Board frames
+
+Pass `--frames` to also write a PNG of the position after every ply, into
+`out/frames/<game>/t0000.png`, `t0001.png` and so on. The move just played
+is highlighted and a king in check is marked, so the directory drops
+straight into ffmpeg or an editor as an image sequence.
+
+```bash
+python orchestrate.py --white ... --black ... --frames
+ffmpeg -framerate 2 -i out/frames/game1/t%04d.png game.mp4
+```
+
+This needs `cairosvg` plus the native libcairo library, neither of which
+is installed by default:
+
+```bash
+pip install cairosvg
+brew install cairo          # macOS
+sudo apt install libcairo2  # Debian/Ubuntu
+```
+
+If they are missing, `--frames` says so and stops **before** any model
+call is billed. Everything else works without them.
 
 ## Options
 
@@ -40,6 +66,8 @@ into a terrible one.
 | `--mode` | `assisted` | `assisted` lists every legal move each turn, `purist` withholds it |
 | `--max-tokens` | `4096` | per model call |
 | `--turn-cap` | `200` | full moves before the game is called a draw |
+| `--frames` | off | write a board PNG after every ply (see above) |
+| `--frame-size` | `480` | frame edge in pixels |
 | `-o`, `--out` | `out` | output directory |
 
 A four-game series with colours alternating, so neither side keeps the
